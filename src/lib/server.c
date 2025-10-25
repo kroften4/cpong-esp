@@ -26,7 +26,7 @@ server_t *server_set_fd(server_t *server, char *port) {
         return NULL;
     }
 
-    int sockfd;
+    int sockfd = 0;
     for ( ; server_ai != NULL; server_ai = server_ai->ai_next) {
         sockfd = socket(server_ai->ai_family, server_ai->ai_socktype, 0);
         if (sockfd == -1) {

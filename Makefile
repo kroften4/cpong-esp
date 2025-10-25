@@ -5,8 +5,10 @@ LFLAGS = -lSDL3 -lm
 
 ifdef DEBUG
 	CFLAGS += -ggdb -O0 -D DEBUG
-else
-	CFLAGS += -O1
+else ifdef SIZE
+	CFLAGS += -Os
+else 
+	CFLAGS += -O2
 endif
 
 COMMON_SRC = $(wildcard src/common/*.c)
