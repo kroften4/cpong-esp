@@ -1,4 +1,5 @@
 #include "krft/run_every.h"
+#include "freertos/FreeRTOS.h"
 #include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
@@ -17,10 +18,11 @@ struct timespec ms_to_timespec(int time_ms) {
     return rt;
 }
 
-void sleep(int time_ms) {
+void sleep_ms(int time_ms) {
     if (time_ms > 0) {
-        struct timespec rt = ms_to_timespec(time_ms);
-        nanosleep(&rt, NULL);
+		vTaskDelay(pdMS_TO_TICKS(time_ms));
+        // struct timespec rt = ms_to_timespec(time_ms);
+        // nanosleep(&rt, NULL);
     }
 }
 
@@ -32,7 +34,7 @@ void run_every(struct run_every_args re_args) {
         int delta_time = start - last;
         run = re_args.func(delta_time, re_args.args);
         int sleep_time = re_args.interval_ms - (get_curr_time_ms() - start);
-        sleep(sleep_time);
+        sleep_ms(sleep_time);
         last = start;
     }
 }

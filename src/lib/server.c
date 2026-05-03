@@ -22,7 +22,8 @@ server_t *server_set_fd(server_t *server, char *port) {
     int ai_status = getaddrinfo(NULL, port, &hints, &server_ai);
     if (ai_status != 0) {
         freeaddrinfo(server_ai);
-        ERRORF("addrinfo: %s", gai_strerror(ai_status));
+        // ERRORF("addrinfo: %s", gai_strerror(ai_status));
+        ERRORF("getaddrinfo: status %d", ai_status);
         return NULL;
     }
 
@@ -168,7 +169,8 @@ int connect_to_server(char *name, char *port) {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     if ((status = getaddrinfo(name, port, &hints, &res)) != 0) {
-        ERRORF("getaddrinfo: %s", gai_strerror(status));
+        // ERRORF("getaddrinfo: %s", gai_strerror(status));
+        ERRORF("getaddrinfo: status %d", status);
         return -1;
     }
 

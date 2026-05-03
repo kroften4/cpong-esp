@@ -9,7 +9,7 @@ int get_curr_time_ms(void);
 
 struct timespec ms_to_timespec(int time_ms);
 
-void sleep(int time_ms);
+void sleep_ms(int time_ms);
 
 struct run_every_args {
     bool (*func)(int delta_time, void *args);

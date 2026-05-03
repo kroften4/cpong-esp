@@ -1,0 +1,13 @@
+menu "CPONG game configuration"
+
+config CPONG_FPS_CAP
+int "FPS cap"
+default 60
+
+config CPONG_NET_TPS_CAP
+int "Network TPS cap"
+default 60
+help
+    This determines how fast client updates are sent to the server
+
+endmenu

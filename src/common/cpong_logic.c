@@ -46,8 +46,8 @@ void init_ball(struct game_obj *ball) {
 }
 
 void init_game(struct pong_state *state) {
-    state->box_size.x = 640;
-    state->box_size.y = 480;
+    state->box_size.x = 480;
+    state->box_size.y = 320;
 
     init_paddle(&state->player1);
     state->player1.pos.x = state->box_size.x - state->player1.size.x / 2;

@@ -2,10 +2,11 @@
 #define __BIN_ARRAY_H__
 
 #include <inttypes.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
-#include <arpa/inet.h>
+#include <lwip/inet.h>
+// #include <arpa/inet.h>
+// #include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
 
