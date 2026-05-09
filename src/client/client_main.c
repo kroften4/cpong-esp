@@ -2,14 +2,28 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "ili9486_display_init.h"
 #include "sdkconfig.h"
+#ifdef CONFIG_IDF_TARGET_LINUX
+#include <SDL3/SDL.h>
+
+#ifndef CONFIG_ILI9486_H_RES
+#define CONFIG_ILI9486_H_RES 480
+#endif // ifndef CONFIG_ILI9486_H_RES
+
+#ifndef CONFIG_ILI9486_V_RES
+#define CONFIG_ILI9486_V_RES 320
+#endif // ifndef CONFIG_ILI9486_V_RES
+
+#else // ifdef CONFIG_IDF_TARGET_LINUX
+#include "esp_lcd_panel_ops.h"
+#include "ili9486_display_init.h"
 #include <freertos/idf_additions.h>
+#endif // ifdef CONFIG_IDF_TARGET_LINUX
+#include "esp_check.h"
 
 #include "client_logic.h"
 #include "cpong_logic.h"
 #include "cpong_packets.h"
-#include "esp_check.h"
 #include "krft/log.h"
 #include "krft/run_every.h"
 #include "krft/server.h"
@@ -39,6 +53,18 @@ static server_t server;
 static struct input input = { 0 };
 pthread_mutex_t input_mtx = PTHREAD_MUTEX_INITIALIZER;
 
+struct client_data client_data = {
+	.input = &input,
+	.state_mtx = &state_mtx,
+	.input_mtx = &input_mtx,
+	.sync_mtx = &sync_mtx,
+	.local_state = &local_state,
+	.server = &server,
+	.server_state = &server_state,
+	.sync = &ssync,
+};
+
+#ifndef CONFIG_IDF_TARGET_LINUX
 static esp_lcd_panel_handle_t panel;
 
 bool onTransDone(esp_lcd_panel_io_handle_t panel_io,
@@ -48,30 +74,42 @@ bool onTransDone(esp_lcd_panel_io_handle_t panel_io,
 	xTaskNotifyGive(draw_task);
 	return true;
 }
+#endif
 
 int client_main(char *server_ip, char *port)
 {
+#ifdef CONFIG_IDF_TARGET_LINUX
+	SDL_Init(SDL_INIT_VIDEO);
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	SDL_CreateWindowAndRenderer("Ponggers", CONFIG_ILI9486_H_RES,
+								CONFIG_ILI9486_V_RES, 0, &window, &renderer);
+	SDL_Event event;
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+#else
 	TaskHandle_t draw_task = xTaskGetCurrentTaskHandle();
 	ili9486_display_init(&panel, onTransDone, draw_task);
+	esp_lcd_panel_swap_xy(panel, true);
+#endif
 
-	// server.fd = connect_to_server(server_ip, port);
-	//
-	// struct packet init_packet = { 0 };
-	// recv_packet(server.fd, &init_packet);
-	// if (init_packet.type != PACKET_INIT) {
-	// 	ERRORF("did not receive init packet: got type %d", init_packet.type);
-	// 	return 1;
-	// }
+	server.fd = connect_to_server(server_ip, port);
 
-	struct pong_state mock_server_state = { .player_ids = { 0, 0 },
-											.score = { 0, 0 } };
-	init_game(&mock_server_state);
-	struct packet init_packet = {
-		.type = PACKET_INIT,
-		.sync = 0,
-		.size = 0,
-		.data.state = mock_server_state,
-	};
+	struct packet init_packet = { 0 };
+	recv_packet(server.fd, &init_packet);
+	if (init_packet.type != PACKET_INIT) {
+		ERRORF("did not receive init packet: got type %d", init_packet.type);
+		return 1;
+	}
+
+	// struct pong_state mock_server_state = { .player_ids = { 0, 0 },
+	// 										.score = { 0, 0 } };
+	// init_game(&mock_server_state);
+	// struct packet init_packet = {
+	// 	.type = PACKET_INIT,
+	// 	.sync = 0,
+	// 	.size = 0,
+	// 	.data.state = mock_server_state,
+	// };
 
 	ssync = init_packet.sync;
 	struct pong_state state = init_packet.data.state;
@@ -83,40 +121,47 @@ int client_main(char *server_ip, char *port)
 	local_state.score[1] = 0;
 	LOG("got init state");
 	print_state(local_state);
+	pthread_t server_state_recv_thread;
+	pthread_create(&server_state_recv_thread, NULL, server_state_receiver,
+				   &client_data);
+	pthread_detach(server_state_recv_thread);
 
-	// pthread_t server_state_recv_thread;
-	// pthread_create(&server_state_recv_thread, NULL, server_state_receiver,
-	// 			   &server);
-	// pthread_detach(server_state_recv_thread);
-	//
-	// struct run_every_args net_re_args = { .func = network_update,
-	// 									  .args = NULL,
-	// 									  .interval_ms =
-	// 										  MIN_NET_TICK_DURATION_MS };
-	// pthread_t network_thread = start_run_every_thread(&net_re_args);
-	// pthread_detach(network_thread);
+	struct run_every_args net_re_args = { .func = network_update,
+										  .args = &client_data,
+										  .interval_ms =
+											  MIN_NET_TICK_DURATION_MS };
+	pthread_t network_thread = start_run_every_thread(&net_re_args);
+	pthread_detach(network_thread);
 
 	struct bitmap stripe_bmp = {};
 	stripe_bmp.size_x = CONFIG_ILI9486_H_RES;
 	stripe_bmp.size_y = LINES_IN_STRIPE;
+#ifdef CONFIG_IDF_TARGET_LINUX
+	stripe_bmp.buf = malloc(stripe_bmp.size_x * stripe_bmp.size_y *
+							sizeof(stripe_bmp.buf[0]));
+	SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565,
+											 SDL_TEXTUREACCESS_STREAMING,
+											 stripe_bmp.size_x,
+											 stripe_bmp.size_y);
+#else
 	stripe_bmp.buf = heap_caps_malloc(stripe_bmp.size_x * stripe_bmp.size_y *
 										  sizeof(stripe_bmp.buf[0]),
 									  MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
+#endif
 
 	int ret = 0;
 	ESP_GOTO_ON_FALSE(stripe_bmp.buf != NULL, 1, error, TAG,
 					  "Failed to allocate stripe buffer");
 
 	struct update_args update_args = {
+#ifdef CONFIG_IDF_TARGET_LINUX
+		.renderer = renderer,
+		.texture = texture,
+		.event = &event,
+#else
 		.panel = panel,
-		.client_data = {
-			.input = &input,
-			.input_mtx = &input_mtx,
-			.local_state = &local_state,
-			.server_state = &server_state,
-			.server = server,
-			.sync = &ssync,
-		},
+#endif
+		.client_data = client_data,
 		.quit = false,
 		.stripe_bmp = &stripe_bmp,
 	};

@@ -36,7 +36,7 @@ void init_paddle(struct game_obj *paddle) {
 void init_ball(struct game_obj *ball) {
     ball->size.x = 10;
     ball->size.y = 10;
-    ball->speed = 0.25;
+    ball->speed = 0.05;
     srand(time(NULL));
     struct vector angle = vector_random_angle(PI / 6, PI / 3, 0.1);
     int dir_x = rand() % 2 * 2 - 1;
@@ -216,7 +216,7 @@ void ball_advance(struct wall wall, struct game_obj paddle1,
         LOGF("toi: %f", coll_info.toi);
         if (coll_info.toi == collisions[3].toi) {
             LOGF("scored! paddle1 %f, paddle2 %f, score %f", collisions[0].toi, collisions[1].toi, collisions[3].toi);
-            return;
+            // return;
         }
         *scored_index = -1;
         ball.pos = coll_info.pos;

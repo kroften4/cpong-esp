@@ -1,7 +1,21 @@
-#include "esp_log.h"
 #include "sdkconfig.h"
+
+#ifdef CONFIG_IDF_TARGET_LINUX
+#include <SDL3/SDL.h>
+
+#ifndef CONFIG_ILI9486_H_RES
+#define CONFIG_ILI9486_H_RES 480
+#endif // ifndef CONFIG_ILI9486_V_RES
+
+#ifndef CONFIG_ILI9486_V_RES
+#define CONFIG_ILI9486_V_RES 320
+#endif // ifndef CONFIG_ILI9486_V_RES
+
+#else // ifdef CONFIG_IDF_TARGET_LINUX
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_types.h>
+#endif // ifdef CONFIG_IDF_TARGET_LINUX
+#include <esp_log.h>
 #include <freertos/idf_additions.h>
 #include <pthread.h>
 
@@ -10,6 +24,7 @@
 #include "krft/log.h"
 #include "rasterizer.h"
 #include "render.h"
+#include "vec.h"
 
 static const char *TAG = "client_logic";
 
@@ -64,7 +79,7 @@ void server_snap(struct pong_state *local, struct pong_state server)
 int server_state_receive(struct client_data *args)
 {
 	struct packet packet = { 0 };
-	int res = recv_packet(args->server.fd, &packet);
+	int res = recv_packet(args->server->fd, &packet);
 	if (res <= 0) {
 		LOG("Couldn't recv from the server");
 		return -1;
@@ -120,6 +135,7 @@ bool network_update(int delta_time, void *client_data)
 		WARNF("Network updates running slow: %d ms behind",
 			  delta_time - MIN_NET_TICK_DURATION_MS);
 	}
+	ESP_LOGD(TAG, "network update");
 
 	pthread_mutex_lock(args->input_mtx);
 	pthread_mutex_lock(args->sync_mtx);
@@ -130,7 +146,7 @@ bool network_update(int delta_time, void *client_data)
 	pthread_mutex_unlock(args->sync_mtx);
 	args->input->input_acc_ms = 0;
 	pthread_mutex_unlock(args->input_mtx);
-	int b_sent = client_send(args->server, packet);
+	int b_sent = client_send(*args->server, packet);
 	if (b_sent <= 0)
 		LOGF("sent %d, input %d", b_sent, (int)packet.data.input.input_acc_ms);
 	return true;
@@ -151,25 +167,63 @@ int receive_paddle_inputs(struct input *input, pthread_mutex_t *input_mtx,
 	return input_direction;
 }
 
+#ifdef CONFIG_IDF_TARGET_LINUX
+void push_frame(struct pong_state state, struct bitmap *bmp,
+				SDL_Renderer *renderer, SDL_Texture *tex)
+#else
 void push_frame(struct pong_state state, struct bitmap *bmp,
 				esp_lcd_panel_handle_t panel)
+#endif
 {
-	size_t stripe_y = 0;
-	while (stripe_y < state.box_size.y) {
-		draw_frame(state, bmp);
-		ESP_LOGI(TAG, "Pushing stripe %d;%d - %d;%d", 0, stripe_y,
-				 bmp->size_x, stripe_y + bmp->size_y);
+	const struct vec screen_pos = { 0, CONFIG_ILI9486_V_RES };
+	struct vec stripe_pos = { 0, screen_pos.y };
+	int32_t y_bottom = stripe_pos.y - CONFIG_ILI9486_V_RES;
+	ESP_LOGD(TAG, "y_bottom = %d; stripe_pos.y = %d", (int)y_bottom,
+			 (int)stripe_pos.y);
+	while (stripe_pos.y > y_bottom) {
+		draw_frame(state, bmp, stripe_pos);
+
+		struct vec stripe_pos_screen =
+			world_to_screen_coords(screen_pos, stripe_pos);
+
+		ESP_LOGD(TAG, "stripe %d;%d -> %d;%d", stripe_pos.x, stripe_pos.y,
+				 stripe_pos_screen.x, stripe_pos_screen.y);
+		ESP_LOGD(TAG, "Pushing stripe %d;%d - %d;%d", 0, stripe_pos_screen.y,
+				 bmp->size_x, stripe_pos_screen.y + bmp->size_y);
+
+#ifdef CONFIG_IDF_TARGET_LINUX
+		const SDL_FRect fsrc = { 0, 0, bmp->size_x, bmp->size_y };
+		const SDL_FRect fdst = { 0, stripe_pos_screen.y, bmp->size_x,
+								 bmp->size_y };
+
+		SDL_UpdateTexture(tex, NULL, bmp->buf, bmp->size_x * 2);
+		SDL_RenderTexture(renderer, tex, &fsrc, &fdst);
+		ESP_LOGD(TAG, "rendered texture");
+#else
 		ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(
-			panel, 0, stripe_y, bmp->size_x, stripe_y + bmp->size_y, bmp->buf));
+			panel, 0, stripe_pos_screen.y, bmp->size_x,
+			stripe_pos_screen.y + bmp->size_y, bmp->buf));
 		// TODO: add circular buffer
 		ulTaskNotifyTake(pdFALSE, pdMS_TO_TICKS(1000));
-		stripe_y += bmp->size_y;
+#endif
+		stripe_pos.y -= bmp->size_y;
 	}
+#ifdef CONFIG_IDF_TARGET_LINUX
+	SDL_RenderPresent(renderer);
+	ESP_LOGD(TAG, "presented");
+#endif
 }
 
 bool update(int delta_time, void *update_args_p)
 {
 	struct update_args *update_args = update_args_p;
+#ifdef CONFIG_IDF_TARGET_LINUX
+	while (SDL_PollEvent(update_args->event)) {
+		if (update_args->event->type == SDL_EVENT_QUIT) {
+			return false;
+		}
+	}
+#endif
 	if (update_args->quit) {
 		return false;
 	}
@@ -184,10 +238,15 @@ bool update(int delta_time, void *update_args_p)
 
 	update_local_state(local_state, delta_time, paddle_direction);
 
-	esp_lcd_panel_handle_t panel = update_args->panel;
 	struct bitmap *bmp = update_args->stripe_bmp;
-
+#ifdef CONFIG_IDF_TARGET_LINUX
+	SDL_Renderer *renderer = update_args->renderer;
+	SDL_Texture *texture = update_args->texture;
+	push_frame(*local_state, bmp, renderer, texture);
+#else
+	esp_lcd_panel_handle_t panel = update_args->panel;
 	push_frame(*local_state, bmp, panel);
+#endif
 
 	return true;
 }
