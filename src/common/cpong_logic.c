@@ -216,7 +216,7 @@ void ball_advance(struct wall wall, struct game_obj paddle1,
         LOGF("toi: %f", coll_info.toi);
         if (coll_info.toi == collisions[3].toi) {
             LOGF("scored! paddle1 %f, paddle2 %f, score %f", collisions[0].toi, collisions[1].toi, collisions[3].toi);
-            // return;
+            return;
         }
         *scored_index = -1;
         ball.pos = coll_info.pos;

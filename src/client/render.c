@@ -1,9 +1,12 @@
+#include "esp_log.h"
 #include "rasterizer.h"
 
 #include "cpong_logic.h"
 #include "krft/log.h"
 #include "render.h"
 #include "vec.h"
+
+static const char *TAG = "render.c";
 
 void draw_obj_debug(struct game_obj obj, struct bitmap *bmp,
 					struct vec screen_pos)
@@ -19,7 +22,7 @@ void draw_obj(struct game_obj obj, struct bitmap *bmp, pixel_t color,
 			  struct vec screen_pos)
 {
 	struct vec top_left = { obj.pos.x - obj.size.x / 2.0f,
-							obj.pos.y - obj.size.y / 2.0f };
+							obj.pos.y + obj.size.y / 2.0f };
 	top_left = world_to_screen_coords(screen_pos, top_left);
 	rast_fillrect(bmp, top_left.x, top_left.y, obj.size.x, obj.size.y, color);
 #ifdef DEBUG
@@ -53,9 +56,13 @@ void draw_state(struct pong_state state, struct bitmap *bmp, pixel_t color,
 				struct vec screen_pos)
 {
 	draw_obj(state.player1, bmp, color, screen_pos);
+	ESP_LOGD(TAG, "drew player1");
 	draw_obj(state.player2, bmp, color, screen_pos);
+	ESP_LOGD(TAG, "drew player2");
 	draw_obj(state.ball, bmp, color, screen_pos);
+	ESP_LOGD(TAG, "drew ball");
 	draw_score(state, bmp, RGB565(0, 0, 255), screen_pos);
+	ESP_LOGD(TAG, "drew score");
 }
 
 void clear_screen(struct bitmap *bmp)
