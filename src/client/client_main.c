@@ -28,6 +28,7 @@
 #include "krft/run_every.h"
 #include "krft/server.h"
 #include "rasterizer.h"
+#include "input.h"
 
 #include "cpong/client_main.h"
 
@@ -90,6 +91,7 @@ int client_main(char *server_ip, char *port)
 	TaskHandle_t draw_task = xTaskGetCurrentTaskHandle();
 	ili9486_display_init(&panel, onTransDone, draw_task);
 	esp_lcd_panel_swap_xy(panel, true);
+	input_init();
 #endif
 
 	server.fd = connect_to_server(server_ip, port);

@@ -25,6 +25,7 @@
 #include "rasterizer.h"
 #include "render.h"
 #include "vec.h"
+#include "input.h"
 
 static const char *TAG = "client_logic";
 
@@ -155,9 +156,15 @@ bool network_update(int delta_time, void *client_data)
 int receive_paddle_inputs(struct input *input, pthread_mutex_t *input_mtx,
 						  const int delta_time)
 {
-	// TODO: add button reads
-	bool up = true;
-	bool down = true;
+#ifdef CONFIG_IDF_TARGET_LINUX
+	const bool *keyboard = SDL_GetKeyboardState(NULL);
+	bool up = keyboard[SDL_SCANCODE_UP] || keyboard[SDL_SCANCODE_W];
+	bool down = keyboard[SDL_SCANCODE_DOWN] || keyboard[SDL_SCANCODE_S];
+#else
+	const bool *keyboard = engine_get_keyboard_state();
+	bool up = keyboard[GAME_BTN_UP];
+	bool down = keyboard[GAME_BTN_DOWN];
+#endif
 
 	int input_direction = (down - up);
 
