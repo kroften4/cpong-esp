@@ -35,6 +35,10 @@ void draw_score(struct pong_state state, struct bitmap *bmp, pixel_t color,
 {
 	int score_diff = state.score[1] - state.score[0];
 	struct vec pos = { state.box_size.x / 2, 0 };
+	if (score_diff < 0) {
+		score_diff = abs(score_diff);
+		pos.x -= score_diff;
+	}
 	rast_fillrect(bmp, pos.x, pos.y, score_diff * 10, state.box_size.y, color);
 }
 
@@ -56,13 +60,13 @@ void draw_state(struct pong_state state, struct bitmap *bmp, pixel_t color,
 				struct vec screen_pos)
 {
 	draw_obj(state.player1, bmp, color, screen_pos);
-	ESP_LOGD(TAG, "drew player1");
+	ESP_LOGV(TAG, "drew player1");
 	draw_obj(state.player2, bmp, color, screen_pos);
-	ESP_LOGD(TAG, "drew player2");
+	ESP_LOGV(TAG, "drew player2");
 	draw_obj(state.ball, bmp, color, screen_pos);
-	ESP_LOGD(TAG, "drew ball");
+	ESP_LOGV(TAG, "drew ball");
 	draw_score(state, bmp, RGB565(0, 0, 255), screen_pos);
-	ESP_LOGD(TAG, "drew score");
+	ESP_LOGV(TAG, "drew score");
 }
 
 void clear_screen(struct bitmap *bmp)
