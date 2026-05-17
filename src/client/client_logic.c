@@ -1,3 +1,4 @@
+#include "krft/run_every.h"
 #include "sdkconfig.h"
 
 #ifdef CONFIG_IDF_TARGET_LINUX
@@ -21,11 +22,11 @@
 
 #include "client_logic.h"
 #include "cpong_logic.h"
+#include "input.h"
 #include "krft/log.h"
 #include "rasterizer.h"
 #include "render.h"
 #include "vec.h"
-#include "input.h"
 
 static const char *TAG = "client_logic";
 
@@ -221,6 +222,9 @@ void push_frame(struct pong_state state, struct bitmap *bmp,
 #endif
 }
 
+static int prev_time_ms = 0;
+static int frames = 0;
+
 bool update(int delta_time, void *update_args_p)
 {
 	struct update_args *update_args = update_args_p;
@@ -233,6 +237,13 @@ bool update(int delta_time, void *update_args_p)
 #endif
 	if (update_args->quit) {
 		return false;
+	}
+	int curr_time_ms = get_curr_time_ms();
+	frames++;
+	if (curr_time_ms - prev_time_ms >= 1000){
+		ESP_LOGI(TAG, "FPS: %d", frames);
+		prev_time_ms = curr_time_ms;
+		frames = 0;
 	}
 	struct client_data args = update_args->client_data;
 
